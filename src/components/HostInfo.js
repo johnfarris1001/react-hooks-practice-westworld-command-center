@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import {
   Radio,
   Icon,
@@ -8,36 +8,84 @@ import {
   Dropdown,
   Divider,
 } from "semantic-ui-react";
+import { HostContext } from "../context/host";
+import { Log } from "../services/Log";
 import "../stylesheets/HostInfo.css";
 
-function HostInfo() {
-  // This state is just to show how the dropdown component works.
-  // Options have to be formatted in this way (array of objects with keys of: key, text, value)
-  // Value has to match the value in the object to render the right text.
+function HostInfo({ toggleActive, changeArea, hosts, areas, log }) {
+  const { selectedHost } = useContext(HostContext)
+  const [active, setActive] = useState(selectedHost.active)
+  const [area, setArea] = useState(selectedHost.area)
+  const patchUrl = `http://localhost:3001/hosts/${selectedHost.id}`
 
-  // IMPORTANT: But whether it should be stateful or not is entirely up to you. Change this component however you like.
   const [options] = useState([
-    { key: "some_area", text: "Some Area", value: "some_area" },
-    { key: "another_area", text: "Another Area", value: "another_area" },
+    { key: "high_plains", text: "High Plains", value: "high_plains" },
+    { key: "lowlands", text: "Lowlands", value: "lowlands" },
+    { key: "under_construction", text: "Under Construction", value: "under_construction" },
+    { key: "pariah", text: "Pariah", value: "pariah" },
+    { key: "python_pass", text: "Python Pass", value: "python_pass" },
+    { key: "badlands", text: "Badlands", value: "badlands" },
   ]);
 
-  const [value] = useState("some_area");
+  const areaPopulation = [0, 0, 0, 0, 0, 0]
+
+  hosts.forEach(host => {
+    for (let place of areas) {
+      if (host.area === place.name) {
+        areaPopulation[place.id - 1]++
+        return
+      }
+    }
+  })
+
+  useEffect(() => {
+    setActive(selectedHost.active)
+    setArea(selectedHost.area)
+  }, [selectedHost])
 
   function handleOptionChange(e, { value }) {
-    // the 'value' attribute is given via Semantic's Dropdown component.
-    // Put a debugger or console.log in here and see what the "value" variable is when you pass in different options.
-    // See the Semantic docs for more info: https://react.semantic-ui.com/modules/dropdown/#usage-controlled
+    for (let place of areas) {
+      if (value === place.name) {
+        if (place.limit <= areaPopulation[place.id - 1]) {
+          log(Log.error(`Too many hosts. Cannot add ${selectedHost.firstName} to ${e.target.textContent}`))
+          return
+        }
+      }
+    }
+    fetch(patchUrl, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ area: value })
+    })
+      .then(r => r.json())
+      .then(data => changeArea(data))
+
+    setArea(value)
+    log(Log.notify(`${selectedHost.firstName} set in area ${e.target.textContent}`))
   }
 
-  function handleRadioChange() {
-    console.log("The radio button fired");
+  function handleRadioChange(e) {
+    fetch(patchUrl, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ active: !selectedHost.active })
+    })
+      .then(r => r.json())
+      .then(data => toggleActive(data.id))
+
+    setActive(!active)
+    log(Log.warn(`${!active ? 'Activated' : 'Decommissioned'} ${selectedHost.firstName}`))
   }
 
   return (
     <Grid>
       <Grid.Column width={6}>
         <Image
-          src={/* pass in the right image here */ ""}
+          src={selectedHost.imageUrl}
           floated="left"
           size="small"
           className="hostImg"
@@ -47,7 +95,7 @@ function HostInfo() {
         <Card>
           <Card.Content>
             <Card.Header>
-              {"Bob"} | {true ? <Icon name="man" /> : <Icon name="woman" />}
+              {`${selectedHost.firstName} ${selectedHost.lastName}`} | {selectedHost.gender === 'Male' ? <Icon name="man" /> : <Icon name="woman" />}
               {/* Think about how the above should work to conditionally render the right First Name and the right gender Icon */}
             </Card.Header>
             <Card.Meta>
@@ -55,8 +103,8 @@ function HostInfo() {
               {/* Checked takes a boolean and determines what position the switch is in. Should it always be true? */}
               <Radio
                 onChange={handleRadioChange}
-                label={"Active"}
-                checked={true}
+                label={active ? "Active" : "Decommissioned"}
+                checked={active ? true : false}
                 slider
               />
             </Card.Meta>
@@ -64,7 +112,7 @@ function HostInfo() {
             Current Area:
             <Dropdown
               onChange={handleOptionChange}
-              value={value}
+              value={area}
               options={options}
               selection
             />

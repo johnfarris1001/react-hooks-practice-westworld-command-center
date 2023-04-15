@@ -1,8 +1,10 @@
-import React from "react";
+import React, { useState } from "react";
 import { Segment, Button } from "semantic-ui-react";
 import { Log } from "../services/Log";
 
-function LogPanel() {
+function LogPanel({ hosts, toggleActiveAll, logs, log }) {
+  const [activate, setActivate] = useState(true)
+
   function dummyLogs() {
     // This is just to show you how this should work. But where should the log data actually get stored?
     // And where should we be creating logs in the first place?
@@ -18,10 +20,40 @@ function LogPanel() {
     return logs;
   }
 
+  function realLogs() {
+    return logs
+  }
+
+  function handleClick() {
+    const updatedHosts = hosts.map(host => {
+      return { ...host, active: activate }
+    })
+    updatedHosts.forEach(host => {
+      fetch(`http://localhost:3001/hosts/${host.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ active: activate })
+      })
+        .then(r => r.json())
+        .then(() => toggleActiveAll(activate))
+    })
+
+    setActivate(!activate)
+
+    if (activate) {
+      log(Log.warn('Activating all hosts!'))
+    } else {
+      log(Log.notify('Decommissioning all hosts.'))
+    }
+
+  }
+
   return (
     <Segment className="HQComps" id="logPanel">
       <pre>
-        {dummyLogs().map((log, i) => (
+        {realLogs().map((log, i) => (
           <p key={i} className={log.type}>
             {log.msg}
           </p>
@@ -31,7 +63,12 @@ function LogPanel() {
       {/* Button below is the Activate All/Decommisssion All button */}
       {/* This isn't always going to be the same color...*/}
       {/* Should the button always read "ACTIVATE ALL"? When should it read "DECOMMISSION ALL"? */}
-      <Button fluid color={"red"} content={"ACTIVATE ALL"} />
+      <Button
+        fluid
+        onClick={handleClick}
+        color={activate ? "red" : "green"}
+        content={activate ? "ACTIVATE ALL" : "DECOMMISSION ALL"}
+      />
     </Segment>
   );
 }
